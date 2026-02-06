@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
     && rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED \
     && pip install comfy-cli \
-    && comfy --skip-prompt install --nvidia --cuda-version 12.6 --version nightly \
+    && comfy --workspace /comfyui --skip-prompt install --nvidia --cuda-version 12.6 --version nightly \
     && find /comfyui -type d -name ".git" -exec rm -rf {} + 2>/dev/null; \
     rm -rf /root/.cache /tmp/*
 

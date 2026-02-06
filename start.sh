@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Use tcmalloc for better memory performance
-export LD_PRELOAD=libtcmalloc.so
+export LD_PRELOAD=libtcmalloc_minimal.so.4
 
 # Copy extra model paths config if network volume exists
 if [ -d "/runpod-volume/models" ]; then

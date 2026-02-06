@@ -14,7 +14,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     [[ -z "$line" || "$line" == \#* ]] && continue
 
     echo "Installing custom node: $line"
-    comfy node install "$line"
+    comfy --workspace /comfyui --skip-prompt node install "$line"
 done < "$CUSTOM_NODES_FILE"
 
 echo "Custom node installation complete"
