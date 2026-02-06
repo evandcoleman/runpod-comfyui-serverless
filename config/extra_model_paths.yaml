@@ -1,0 +1,19 @@
+# Extra model paths for network volume support
+# When using a RunPod network volume mounted at /runpod-volume,
+# models stored there will be available to ComfyUI without re-downloading.
+#
+# To use: mount your network volume at /runpod-volume and place models
+# in the appropriate subdirectories under /runpod-volume/models/
+
+network_volume:
+  base_path: /runpod-volume/models/
+  checkpoints: checkpoints/
+  clip: clip/
+  clip_vision: clip_vision/
+  controlnet: controlnet/
+  diffusion_models: diffusion_models/
+  embeddings: embeddings/
+  loras: loras/
+  text_encoders: text_encoders/
+  upscale_models: upscale_models/
+  vae: vae/

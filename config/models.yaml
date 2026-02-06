@@ -1,0 +1,20 @@
+# Model manifest for ComfyUI worker
+# Each entry specifies a HuggingFace repo and files to download
+#
+# Format:
+#   - repo: HuggingFace repo ID
+#     files:
+#       - path: path within the repo
+#         dest: destination subdirectory under ComfyUI/models/
+#
+# Set HF_TOKEN environment variable for gated models
+
+models:
+  - repo: Comfy-Org/z_image_turbo
+    files:
+      - path: split_files/diffusion_models/z_image_turbo_bf16.safetensors
+        dest: diffusion_models/
+      - path: split_files/text_encoders/qwen_3_4b.safetensors
+        dest: text_encoders/
+      - path: split_files/vae/ae.safetensors
+        dest: vae/

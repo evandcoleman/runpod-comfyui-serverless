@@ -1,0 +1,5 @@
+# Custom nodes to install via comfy-cli
+# One node per line. Lines starting with # are ignored.
+# Example:
+#   comfyui-impact-pack
+#   comfyui-manager
