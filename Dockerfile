@@ -53,22 +53,4 @@ COPY start.sh /start.sh
 COPY config/ /app/config/
 RUN chmod +x /start.sh
 
-# Stage 2: Download models
-FROM base AS downloader
-
-COPY config/models.yaml /app/config/models.yaml
-COPY scripts/download_models.py /app/scripts/download_models.py
-
-ENV COMFYUI_MODELS_DIR=/comfyui/models
-
-# Use Docker secret for HF token to avoid leaking in image layers
-RUN --mount=type=secret,id=HF_TOKEN \
-    HF_TOKEN=$(cat /run/secrets/HF_TOKEN 2>/dev/null || echo "") \
-    python /app/scripts/download_models.py
-
-# Stage 3: Final image with models
-FROM base AS final
-
-COPY --from=downloader /comfyui/models /comfyui/models
-
 CMD ["/start.sh"]
