@@ -22,11 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 && \
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
+# Remove externally-managed-environment guard so comfy-cli's internal
+# pip calls work without --break-system-packages
+RUN rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED
+
 # Install uv for fast package management
-RUN pip install --break-system-packages uv
+RUN pip install uv
 
 # Install comfy-cli and ComfyUI
-RUN pip install --break-system-packages comfy-cli && \
+RUN pip install comfy-cli && \
     comfy --skip-prompt install --nvidia --cuda-version 12.6 --version nightly
 
 # Set ComfyUI directory
@@ -41,7 +45,7 @@ RUN chmod +x /app/scripts/install_custom_nodes.sh && \
 
 # Install handler dependencies
 COPY requirements.txt /app/requirements.txt
-RUN pip install --break-system-packages -r /app/requirements.txt
+RUN pip install -r /app/requirements.txt
 
 # Copy application code
 COPY handler.py /app/handler.py
