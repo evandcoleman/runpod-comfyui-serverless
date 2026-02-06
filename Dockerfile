@@ -41,6 +41,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
 
 COPY handler.py /app/handler.py
+COPY scripts/download_models.py /app/scripts/download_models.py
 COPY start.sh /start.sh
 COPY config/ /app/config/
 RUN chmod +x /start.sh

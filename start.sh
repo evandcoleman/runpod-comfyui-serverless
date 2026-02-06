@@ -10,6 +10,10 @@ if [ -d "/runpod-volume/models" ]; then
     cp /app/config/extra_model_paths.yaml /comfyui/extra_model_paths.yaml
 fi
 
+# Download models if not already present
+echo "Checking models..."
+python /app/scripts/download_models.py
+
 echo "Starting ComfyUI server..."
 cd /comfyui
 python main.py \
