@@ -27,7 +27,7 @@ RUN pip install --break-system-packages uv
 
 # Install comfy-cli and ComfyUI
 RUN pip install --break-system-packages comfy-cli && \
-    comfy --skip-prompt install --nvidia --cuda-version 12.6 --url https://github.com/comfyanonymous/ComfyUI.git --commit 56c2787a49c0397bc284cfef64f0a2d2f8e1bc92
+    comfy --skip-prompt install --nvidia --cuda-version 12.6 --version nightly
 
 # Set ComfyUI directory
 ENV COMFYUI_DIR=/comfyui
@@ -55,11 +55,12 @@ FROM base AS downloader
 COPY config/models.yaml /app/config/models.yaml
 COPY scripts/download_models.py /app/scripts/download_models.py
 
-ARG HF_TOKEN=""
-ENV HF_TOKEN=${HF_TOKEN}
 ENV COMFYUI_MODELS_DIR=/comfyui/models
 
-RUN python /app/scripts/download_models.py
+# Use Docker secret for HF token to avoid leaking in image layers
+RUN --mount=type=secret,id=HF_TOKEN \
+    HF_TOKEN=$(cat /run/secrets/HF_TOKEN 2>/dev/null || echo "") \
+    python /app/scripts/download_models.py
 
 # Stage 3: Final image with models
 FROM base AS final
