@@ -154,16 +154,17 @@ def upload_to_s3(image_bytes: bytes, filename: str, s3_config: dict) -> str:
 # WebSocket monitoring
 # ---------------------------------------------------------------------------
 
-def wait_for_completion(prompt_id: str, url: str = COMFYUI_URL, timeout: int = 600) -> bool:
-    """Connect via WebSocket and wait for workflow completion."""
+def connect_ws(client_id: str, url: str = COMFYUI_URL, timeout: int = 600):
+    """Connect a WebSocket to ComfyUI for a given client_id."""
     ws_url = url.replace("http://", "ws://").replace("https://", "wss://")
-    client_id = str(uuid.uuid4())
-
-    ws = websocket.create_connection(
+    return websocket.create_connection(
         f"{ws_url}/ws?clientId={client_id}",
         timeout=timeout,
     )
 
+
+def wait_for_completion(ws, prompt_id: str, timeout: int = 600) -> bool:
+    """Wait on an existing WebSocket connection for workflow completion."""
     try:
         start = time.time()
         while time.time() - start < timeout:
@@ -247,16 +248,23 @@ def handler(job: dict) -> dict:
         except Exception as e:
             return {"error": f"Failed to upload images: {e}"}
 
-    # Queue the workflow
+    # Connect WebSocket before queueing to avoid missing completion events
     client_id = str(uuid.uuid4())
+    try:
+        ws = connect_ws(client_id)
+    except Exception as e:
+        return {"error": f"Failed to connect WebSocket: {e}"}
+
+    # Queue the workflow
     try:
         prompt_id = queue_workflow(workflow, client_id)
     except RuntimeError as e:
+        ws.close()
         return {"error": str(e)}
 
     # Wait for completion
     try:
-        wait_for_completion(prompt_id)
+        wait_for_completion(ws, prompt_id)
     except (RuntimeError, TimeoutError) as e:
         return {"error": str(e)}
 

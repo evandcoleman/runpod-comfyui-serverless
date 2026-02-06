@@ -5,14 +5,14 @@
         "class_type": "UNETLoader",
         "inputs": {
           "unet_name": "z_image_turbo_bf16.safetensors",
-          "weight_dtype": "bf16"
+          "weight_dtype": "default"
         }
       },
       "2": {
         "class_type": "CLIPLoader",
         "inputs": {
           "clip_name": "qwen_3_4b.safetensors",
-          "type": "llama3_2"
+          "type": "qwen_image"
         }
       },
       "3": {
