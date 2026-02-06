@@ -14,7 +14,15 @@ while IFS= read -r line || [ -n "$line" ]; do
     [[ -z "$line" || "$line" == \#* ]] && continue
 
     echo "Installing custom node: $line"
-    comfy --workspace /comfyui --skip-prompt node install "$line"
+    if [[ "$line" == http* ]]; then
+        repo_name=$(basename "$line" .git)
+        git clone --depth 1 "$line" "/comfyui/custom_nodes/$repo_name"
+        if [ -f "/comfyui/custom_nodes/$repo_name/requirements.txt" ]; then
+            pip install -r "/comfyui/custom_nodes/$repo_name/requirements.txt"
+        fi
+    else
+        comfy --workspace /comfyui --skip-prompt node install "$line"
+    fi
 done < "$CUSTOM_NODES_FILE"
 
 echo "Custom node installation complete"

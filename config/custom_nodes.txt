@@ -1,5 +1,8 @@
-# Custom nodes to install via comfy-cli
-# One node per line. Lines starting with # are ignored.
-# Example:
+# Custom nodes to install via comfy-cli or git clone
+# One entry per line. Lines starting with # are ignored.
+# Use a package name for comfy-cli registry, or a full URL for git repos.
+# Examples:
 #   comfyui-impact-pack
-#   comfyui-manager
+#   https://github.com/user/repo
+https://github.com/evandcoleman/comfyui-model-manager-nodes
+https://github.com/gseth/ControlAltAI-Nodes
