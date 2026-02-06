@@ -224,61 +224,112 @@ def collect_outputs(prompt_id: str, s3_config: dict | None = None, url: str = CO
 # Main handler
 # ---------------------------------------------------------------------------
 
-def handler(job: dict) -> dict:
-    """RunPod serverless handler function."""
+def handler(job: dict):
+    """RunPod serverless handler function (generator for streaming progress)."""
     job_input = job.get("input", {})
 
     # Validate
     validated, error = validate_input(job_input)
     if error:
-        return {"error": error}
+        yield {"error": error}
+        return
 
     workflow = validated["workflow"]
     images = validated.get("images", [])
     s3_config = validated.get("s3")
 
     # Wait for ComfyUI
+    yield {"status": "waiting", "message": "Waiting for ComfyUI server..."}
     if not check_server():
-        return {"error": "ComfyUI server failed to start"}
+        yield {"error": "ComfyUI server failed to start"}
+        return
 
     # Upload input images if provided
     if images:
+        yield {"status": "uploading", "message": f"Uploading {len(images)} input image(s)..."}
         try:
             upload_images(images)
         except Exception as e:
-            return {"error": f"Failed to upload images: {e}"}
+            yield {"error": f"Failed to upload images: {e}"}
+            return
 
     # Connect WebSocket before queueing to avoid missing completion events
     client_id = str(uuid.uuid4())
     try:
         ws = connect_ws(client_id)
     except Exception as e:
-        return {"error": f"Failed to connect WebSocket: {e}"}
+        yield {"error": f"Failed to connect WebSocket: {e}"}
+        return
 
     # Queue the workflow
+    yield {"status": "queued", "message": "Submitting workflow to ComfyUI..."}
     try:
         prompt_id = queue_workflow(workflow, client_id)
     except RuntimeError as e:
         ws.close()
-        return {"error": str(e)}
+        yield {"error": str(e)}
+        return
 
-    # Wait for completion
+    # Stream progress from WebSocket
     try:
-        wait_for_completion(ws, prompt_id)
-    except (RuntimeError, TimeoutError) as e:
-        return {"error": str(e)}
+        start = time.time()
+        timeout = 600
+        current_node = None
+        while time.time() - start < timeout:
+            message = ws.recv()
+            if isinstance(message, str):
+                data = json.loads(message)
+                msg_type = data.get("type")
+
+                if msg_type == "progress":
+                    prog = data.get("data", {})
+                    yield {
+                        "status": "running",
+                        "node": current_node,
+                        "progress": prog.get("value", 0),
+                        "max": prog.get("max", 0),
+                    }
+
+                elif msg_type == "executing":
+                    exec_data = data.get("data", {})
+                    if exec_data.get("prompt_id") != prompt_id:
+                        continue
+                    node = exec_data.get("node")
+                    if node is None:
+                        break  # Workflow complete
+                    current_node = node
+                    yield {"status": "running", "message": f"Executing node {node}..."}
+
+                elif msg_type == "execution_error":
+                    error_data = data.get("data", {})
+                    yield {"error": f"ComfyUI execution error: {error_data.get('exception_message', 'Unknown error')}"}
+                    return
+
+                elif msg_type == "execution_cached":
+                    cached = data.get("data", {})
+                    nodes = cached.get("nodes", [])
+                    if nodes:
+                        yield {"status": "running", "message": f"Cached {len(nodes)} node(s)"}
+        else:
+            yield {"error": f"Workflow did not complete within {timeout}s"}
+            return
+    finally:
+        ws.close()
 
     # Collect results
+    yield {"status": "collecting", "message": "Collecting output images..."}
     try:
         results = collect_outputs(prompt_id, s3_config)
     except Exception as e:
-        return {"error": f"Failed to collect outputs: {e}"}
+        yield {"error": f"Failed to collect outputs: {e}"}
+        return
 
     if not results:
-        return {"error": "No output images produced"}
+        yield {"error": "No output images produced"}
+        return
 
-    return {"images": results}
+    yield {"images": results}
 
 
 if __name__ == "__main__":
-    runpod.serverless.start({"handler": handler})
+    runpod.serverless.start({"handler": handler, "return_aggregate_stream": True})

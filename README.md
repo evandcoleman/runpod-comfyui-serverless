@@ -128,6 +128,38 @@ comfyui-manager
 
 They'll be installed via `comfy-cli` during the Docker build.
 
+## Running Workflows
+
+Use `run_workflow.py` to submit a workflow to your RunPod endpoint and stream progress in real time:
+
+```bash
+export RUNPOD_API_KEY="your-api-key"
+python run_workflow.py path/to/workflow.json
+```
+
+The script streams per-node progress from the handler via RunPod's `/stream` endpoint:
+
+```
+Submitting workflow: workflow.json
+Job ID: abc-123
+  [0s] Waiting for ComfyUI server...
+  [2s] Submitting workflow to ComfyUI...
+  [3s] Executing node 3...
+  [5s] Node 3: 25% (5/20)
+  [12s] Collecting output images...
+  Saved: ./output/ComfyUI_00001_.png
+```
+
+Options:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-o`, `--output-dir` | `./output` | Directory to save output images |
+| `--endpoint` | RunPod endpoint URL | Override the API endpoint |
+| `--api-key` | `$RUNPOD_API_KEY` | RunPod API key |
+
+The workflow JSON must be in ComfyUI **API format**. See [Getting the Workflow JSON](#getting-the-workflow-json).
+
 ## Local Testing
 
 ```bash
