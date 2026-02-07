@@ -45,6 +45,24 @@ const STYLES = `
 }
 .runpod-overlay-close:hover { color: #fff; }
 
+.runpod-overlay-cancel {
+  background: none;
+  border: none;
+  color: #d9534f;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  line-height: 1;
+}
+.runpod-overlay-cancel:hover { color: #ff6b6b; }
+
+.runpod-overlay-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .runpod-overlay-body {
   padding: 12px 14px;
 }
@@ -64,6 +82,7 @@ const STYLES = `
 .runpod-phase[data-phase="saving"]     { color: #1abc9c; }
 .runpod-phase[data-phase="done"]       { color: #5cb85c; }
 .runpod-phase[data-phase="error"]      { color: #d9534f; }
+.runpod-phase[data-phase="cancelled"] { color: #f0ad4e; }
 
 .runpod-progress-label {
   font-size: 11px;
@@ -123,6 +142,7 @@ const STYLES = `
 
 .runpod-overlay.success .runpod-overlay-header { background: #1a3a1a; }
 .runpod-overlay.error .runpod-overlay-header { background: #3a1a1a; }
+.runpod-overlay.cancelled .runpod-overlay-header { background: #3a2a1a; }
 
 /* Gallery */
 .runpod-gallery-backdrop {
@@ -266,7 +286,10 @@ function createOverlay() {
   overlay.innerHTML = `
     <div class="runpod-overlay-header">
       <span>RunPod Cloud</span>
-      <button class="runpod-overlay-close" title="Close">&times;</button>
+      <div class="runpod-overlay-header-buttons">
+        <button class="runpod-overlay-cancel" title="Cancel job">Cancel</button>
+        <button class="runpod-overlay-close" title="Close">&times;</button>
+      </div>
     </div>
     <div class="runpod-overlay-body">
       <div class="runpod-phase" data-phase="starting">Starting</div>
@@ -285,6 +308,7 @@ function createOverlay() {
     </div>
   `;
   overlay.querySelector(".runpod-overlay-close").addEventListener("click", removeOverlay);
+  overlay.querySelector(".runpod-overlay-cancel").addEventListener("click", cancelJob);
   document.body.appendChild(overlay);
   return overlay;
 }
@@ -357,7 +381,7 @@ function updateOverlay(message, overallPct = null, stepPct = null) {
 function setOverlayState(state) {
   const overlay = document.getElementById("runpod-overlay");
   if (!overlay) return;
-  overlay.classList.remove("success", "error");
+  overlay.classList.remove("success", "error", "cancelled");
   if (state) overlay.classList.add(state);
   if (state === "error") setPhase("error", "Error");
 }
@@ -440,18 +464,20 @@ async function submitWorkflow(endpointUrl, apiKey, workflow) {
   return data.id;
 }
 
-async function pollStream(endpointUrl, apiKey, jobId) {
+async function pollStream(endpointUrl, apiKey, jobId, signal) {
   const headers = { "Authorization": `Bearer ${apiKey}` };
   const seenIndices = new Set();
   const start = Date.now();
   let finalOutput = null;
 
   while (Date.now() - start < POLL_TIMEOUT) {
+    if (signal?.aborted) return null;
+
     const elapsed = ((Date.now() - start) / 1000).toFixed(0);
 
     // Poll stream
     try {
-      const streamResp = await fetch(`${endpointUrl}/stream/${jobId}`, { headers });
+      const streamResp = await fetch(`${endpointUrl}/stream/${jobId}`, { headers, signal });
       if (streamResp.ok) {
         const streamData = await streamResp.json();
         const stream = streamData.stream || [];
@@ -528,6 +554,7 @@ async function pollStream(endpointUrl, apiKey, jobId) {
         }
       }
     } catch (e) {
+      if (e.name === "AbortError") return null;
       // Stream endpoint may 404 early on, ignore and retry
     }
 
@@ -535,7 +562,7 @@ async function pollStream(endpointUrl, apiKey, jobId) {
 
     // Check job status
     try {
-      const statusResp = await fetch(`${endpointUrl}/status/${jobId}`, { headers });
+      const statusResp = await fetch(`${endpointUrl}/status/${jobId}`, { headers, signal });
       if (statusResp.ok) {
         const statusData = await statusResp.json();
         const jobStatus = statusData.status;
@@ -562,6 +589,7 @@ async function pollStream(endpointUrl, apiKey, jobId) {
         }
       }
     } catch (e) {
+      if (e.name === "AbortError") return null;
       // Status check failed, retry
     }
 
@@ -608,6 +636,42 @@ async function saveImages(images) {
 // ---------------------------------------------------------------------------
 
 let running = false;
+let currentJobId = null;
+let currentEndpointUrl = null;
+let currentApiKey = null;
+let pollAbortController = null;
+
+async function cancelJob() {
+  if (!currentJobId || !currentEndpointUrl || !currentApiKey) return;
+
+  // Abort the poll loop first
+  if (pollAbortController) {
+    pollAbortController.abort();
+    pollAbortController = null;
+  }
+
+  // Fire cancel request to RunPod
+  try {
+    await fetch(`${currentEndpointUrl}/cancel/${currentJobId}`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${currentApiKey}` },
+    });
+  } catch {
+    // Best-effort; the abort already stopped our side
+  }
+
+  setOverlayState("cancelled");
+  setPhase("cancelled", "Cancelled");
+  updateOverlay("Job cancelled");
+  hideCancelButton();
+  running = false;
+  currentJobId = null;
+}
+
+function hideCancelButton() {
+  const btn = document.querySelector(".runpod-overlay-cancel");
+  if (btn) btn.style.display = "none";
+}
 
 async function runOnCloud() {
   if (running) return;
@@ -633,15 +697,19 @@ async function runOnCloud() {
   }
 
   running = true;
+  currentEndpointUrl = endpointUrl;
+  currentApiKey = apiKey;
   injectStyles();
   createOverlay();
 
   try {
     updateOverlay("Submitting workflow...");
     const jobId = await submitWorkflow(endpointUrl, apiKey, prompt);
+    currentJobId = jobId;
     updateOverlay(`Job submitted: ${jobId.slice(0, 12)}...`);
 
-    const result = await pollStream(endpointUrl, apiKey, jobId);
+    pollAbortController = new AbortController();
+    const result = await pollStream(endpointUrl, apiKey, jobId, pollAbortController.signal);
 
     if (result && result.images && result.images.length > 0) {
       setPhase("saving", "Saving");
@@ -666,6 +734,11 @@ async function runOnCloud() {
     updateOverlay(`Error: ${e.message}`);
   } finally {
     running = false;
+    currentJobId = null;
+    currentEndpointUrl = null;
+    currentApiKey = null;
+    pollAbortController = null;
+    hideCancelButton();
   }
 }
 
