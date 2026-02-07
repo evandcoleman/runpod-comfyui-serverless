@@ -245,18 +245,20 @@ function showGallery(images) {
     }
     imgEl.alt = img.filename || "Output";
 
-    const link = document.createElement("a");
-    link.textContent = `Save ${img.filename || "image"}`;
-    link.download = img.filename || "output.png";
-    if (img.url) {
-      link.href = img.url;
-      link.target = "_blank";
-    } else if (img.data) {
-      link.href = `data:image/png;base64,${img.data}`;
-    }
-
     item.appendChild(imgEl);
-    item.appendChild(link);
+
+    const label = document.createElement("span");
+    label.style.cssText = "font-size: 12px; color: #aaa;";
+    if (img.savedAs) {
+      label.textContent = `Saved: ${img.savedAs}`;
+      label.style.color = "#6c6";
+    } else if (img.saveError) {
+      label.textContent = `Save failed: ${img.saveError}`;
+      label.style.color = "#c66";
+    } else {
+      label.textContent = img.filename || "output.png";
+    }
+    item.appendChild(label);
     grid.appendChild(item);
   }
 
@@ -386,6 +388,36 @@ async function pollStream(endpointUrl, apiKey, jobId) {
 }
 
 // ---------------------------------------------------------------------------
+// Save images to ComfyUI output directory
+// ---------------------------------------------------------------------------
+
+async function saveImages(images) {
+  const saved = [];
+  for (const img of images) {
+    try {
+      const resp = await fetch("/runpod/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: img.filename || "output.png",
+          data: img.data || undefined,
+          url: img.url || undefined,
+        }),
+      });
+      if (resp.ok) {
+        const result = await resp.json();
+        saved.push({ ...img, savedAs: result.filename, savedPath: result.path });
+      } else {
+        saved.push({ ...img, saveError: `Save failed (${resp.status})` });
+      }
+    } catch (e) {
+      saved.push({ ...img, saveError: e.message });
+    }
+  }
+  return saved;
+}
+
+// ---------------------------------------------------------------------------
 // Main execution flow
 // ---------------------------------------------------------------------------
 
@@ -426,9 +458,12 @@ async function runOnCloud() {
     const result = await pollStream(endpointUrl, apiKey, jobId);
 
     if (result && result.images && result.images.length > 0) {
+      updateOverlay(`Saving ${result.images.length} image(s)...`, 100);
+      const saved = await saveImages(result.images);
+      const successCount = saved.filter((s) => s.savedAs).length;
       setOverlayState("success");
-      updateOverlay(`Done — ${result.images.length} image(s)`, 100);
-      showGallery(result.images);
+      updateOverlay(`Done — ${successCount} image(s) saved to output/`, 100);
+      showGallery(saved);
     } else if (result && result.error) {
       setOverlayState("error");
       updateOverlay(`Error: ${result.error}`);
