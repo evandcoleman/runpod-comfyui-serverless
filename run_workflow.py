@@ -90,8 +90,16 @@ def stream_progress(endpoint: str, api_key: str, job_id: str, interval: float = 
         job_status = status_data.get("status")
 
         if job_status == "COMPLETED":
-            # Final output may be in the aggregated status response
-            return final_output or status_data.get("output", {})
+            if final_output:
+                return final_output
+            # Aggregated output is a list of all yielded chunks — find the final one
+            agg = status_data.get("output", [])
+            if isinstance(agg, list):
+                for chunk in reversed(agg):
+                    if isinstance(chunk, dict) and ("images" in chunk or "error" in chunk):
+                        return chunk
+                return agg[-1] if agg else {"error": "No output"}
+            return agg
         elif job_status == "FAILED":
             print(f"Job failed after {elapsed:.0f}s:", file=sys.stderr)
             print(json.dumps(status_data, indent=2), file=sys.stderr)
