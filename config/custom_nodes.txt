@@ -6,7 +6,7 @@
 #   comfyui-impact-pack
 #   https://github.com/user/repo
 #   https://github.com/user/repo@abc123
-https://github.com/evandcoleman/comfyui-model-manager-nodes@61a7eaf
+https://github.com/evandcoleman/comfyui-model-manager-nodes@dba3831
 https://github.com/gseth/ControlAltAI-Nodes@721492b
 https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes@d78b780
 https://github.com/ltdrdata/was-node-suite-comfyui@afeee09
