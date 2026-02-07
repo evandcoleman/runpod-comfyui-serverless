@@ -155,10 +155,14 @@ function injectStyles() {
 }
 
 function getSetting(id) {
-  // ComfyUI stores settings in localStorage under "Comfy.Settings.{id}"
-  const val = localStorage.getItem(`Comfy.Settings.${id}`);
-  if (val === null) return "";
-  try { return JSON.parse(val); } catch { return val; }
+  // Use the new extensionManager API if available, fall back to localStorage
+  try {
+    return app.extensionManager.setting.get(id);
+  } catch {
+    const val = localStorage.getItem(`Comfy.Settings.${id}`);
+    if (val === null) return "";
+    try { return JSON.parse(val); } catch { return val; }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -390,13 +394,13 @@ let running = false;
 async function runOnCloud() {
   if (running) return;
 
-  const endpointUrl = getSetting("runpod_cloud.endpoint_url")?.replace(/\/+$/, "");
-  const apiKey = getSetting("runpod_cloud.api_key");
+  const endpointUrl = getSetting("RunPod.Connection.EndpointURL")?.replace(/\/+$/, "");
+  const apiKey = getSetting("RunPod.Connection.APIKey");
 
   if (!endpointUrl || !apiKey) {
     alert(
       "RunPod Cloud is not configured.\n\n" +
-      "Go to Settings > RunPod Cloud and set your endpoint URL and API key."
+      "Go to Settings and search for 'RunPod' to set your endpoint URL and API key."
     );
     return;
   }
@@ -446,91 +450,77 @@ async function runOnCloud() {
 // Extension registration
 // ---------------------------------------------------------------------------
 
+const COMMAND_ID = "RunPod.RunOnCloud";
+
 app.registerExtension({
   name: "runpod.cloud",
+
+  // Settings registered via the settings array (new API)
+  settings: [
+    {
+      id: "RunPod.Connection.EndpointURL",
+      name: "Endpoint URL",
+      type: "text",
+      defaultValue: "",
+      tooltip: "Full RunPod serverless endpoint URL (e.g. https://api.runpod.ai/v2/your-endpoint-id)",
+      category: ["RunPod", "Connection", "Endpoint URL"],
+    },
+    {
+      id: "RunPod.Connection.APIKey",
+      name: "API Key",
+      type: "text",
+      defaultValue: "",
+      tooltip: "Your RunPod API key",
+      category: ["RunPod", "Connection", "API Key"],
+    },
+  ],
+
+  // Commands for the topbar menu
+  commands: [
+    {
+      id: COMMAND_ID,
+      label: "Run on Cloud",
+      function: runOnCloud,
+    },
+  ],
+
+  // Place the command in the top menu bar
+  menuCommands: [
+    {
+      path: ["RunPod"],
+      commands: [COMMAND_ID],
+    },
+  ],
 
   init() {
     injectStyles();
   },
 
-  setup() {
-    // Register settings
-    app.ui.settings.addSetting({
-      id: "runpod_cloud.endpoint_url",
-      name: "RunPod Endpoint URL",
-      type: "text",
-      defaultValue: "",
-      tooltip: "Full RunPod serverless endpoint URL (e.g. https://api.runpod.ai/v2/your-endpoint-id)",
-      category: ["RunPod Cloud", "Connection"],
-    });
+  async setup() {
+    // Also add a dedicated toolbar button via ComfyButton for quick access
+    try {
+      const { ComfyButton } = await import("../../scripts/ui/components/button.js");
+      const { ComfyButtonGroup } = await import("../../scripts/ui/components/buttonGroup.js");
 
-    app.ui.settings.addSetting({
-      id: "runpod_cloud.api_key",
-      name: "RunPod API Key",
-      type: "text",
-      defaultValue: "",
-      tooltip: "Your RunPod API key",
-      category: ["RunPod Cloud", "Connection"],
-    });
-
-    // Add toolbar button
-    const btn = document.createElement("button");
-    btn.id = "runpod-cloud-btn";
-    btn.textContent = "Run on Cloud";
-    btn.title = "Submit workflow to RunPod serverless endpoint";
-    btn.style.cssText = `
-      font-size: 13px;
-      padding: 4px 12px;
-      cursor: pointer;
-      border-radius: 4px;
-      border: 1px solid #555;
-      background: #2a2a2a;
-      color: #e0e0e0;
-    `;
-    btn.addEventListener("mouseenter", () => { btn.style.background = "#3a3a3a"; });
-    btn.addEventListener("mouseleave", () => { btn.style.background = "#2a2a2a"; });
-    btn.addEventListener("click", runOnCloud);
-
-    // Try multiple selectors for different ComfyUI versions
-    const selectors = [
-      ".comfyui-menu .comfyui-menu-right",
-      ".comfy-menu-btns",
-      ".comfyui-body-top .comfyui-menu",
-    ];
-
-    let injected = false;
-    for (const sel of selectors) {
-      const target = document.querySelector(sel);
-      if (target) {
-        target.prepend(btn);
-        injected = true;
-        break;
-      }
-    }
-
-    // Fallback: retry after DOM settles
-    if (!injected) {
-      const observer = new MutationObserver((_mutations, obs) => {
-        for (const sel of selectors) {
-          const target = document.querySelector(sel);
-          if (target) {
-            target.prepend(btn);
-            obs.disconnect();
-            return;
-          }
-        }
+      const btn = new ComfyButton({
+        icon: "cloud-upload",
+        action: runOnCloud,
+        tooltip: "Run on Cloud (RunPod)",
+        content: "Run on Cloud",
+        classList: "comfyui-button comfyui-menu-mobile-collapse",
       });
-      observer.observe(document.body, { childList: true, subtree: true });
-      // Stop observing after 10s to avoid leaks
-      setTimeout(() => observer.disconnect(), 10000);
-    }
 
-    // Register as a menu command if the API supports it
-    if (app.registerExtension?.menuCommands || app.ui?.menu) {
-      try {
-        app.ui?.menu?.addCommand?.("RunPod", "Run on Cloud", runOnCloud);
-      } catch {
-        // Older ComfyUI versions may not support this
+      const group = new ComfyButtonGroup(btn.element);
+      app.menu?.settingsGroup?.element?.before(group.element);
+    } catch {
+      // Fallback for older ComfyUI: inject a plain button into the legacy menu
+      const menu = document.querySelector(".comfy-menu");
+      if (menu) {
+        const btn = document.createElement("button");
+        btn.textContent = "Run on Cloud";
+        btn.title = "Submit workflow to RunPod serverless endpoint";
+        btn.addEventListener("click", runOnCloud);
+        menu.append(btn);
       }
     }
   },
