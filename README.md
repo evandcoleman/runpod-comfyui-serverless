@@ -128,7 +128,38 @@ comfyui-manager
 
 They'll be installed via `comfy-cli` during the Docker build.
 
-## Running Workflows
+## ComfyUI "Run on Cloud" Extension
+
+A built-in ComfyUI extension that adds a **Run on Cloud** button directly to the UI toolbar. Click it to submit the current workflow to your RunPod endpoint and stream progress in real time — no export/CLI step needed.
+
+### Installation
+
+```bash
+# Symlink into your ComfyUI custom_nodes directory
+cd /path/to/ComfyUI/custom_nodes
+ln -s /path/to/runpod-comfyui-serverless/comfyui-runpod-cloud .
+
+# Or for the Docker image, it's already included
+```
+
+Then restart ComfyUI.
+
+### Configuration
+
+1. Open ComfyUI in your browser
+2. Go to **Settings** (gear icon)
+3. Find **RunPod Cloud** in the settings categories
+4. Set **RunPod Endpoint URL** (e.g. `https://api.runpod.ai/v2/your-endpoint-id`)
+5. Set **RunPod API Key**
+
+### Usage
+
+1. Build your workflow as usual
+2. Click **Run on Cloud** in the top toolbar
+3. A progress overlay appears in the bottom-right showing real-time status
+4. When complete, a fullscreen gallery displays the output images with save links
+
+## Running Workflows (CLI)
 
 Use `run_workflow.py` to submit a workflow to your RunPod endpoint and stream progress in real time:
 
