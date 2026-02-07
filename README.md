@@ -7,11 +7,7 @@ A RunPod serverless template that accepts ComfyUI workflow JSON (API format), ex
 ### 1. Build the Docker image
 
 ```bash
-# Build with models baked in
-docker build --target final -t comfyui-worker .
-
-# Build with HuggingFace token for gated models
-docker build --target final --build-arg HF_TOKEN=hf_xxx -t comfyui-worker .
+docker build -t comfyui-worker .
 ```
 
 ### 2. Test locally (requires NVIDIA GPU)
@@ -59,6 +55,27 @@ python test/test_local.py --http http://localhost:8000 test/test_input.json
 | `workflow` | Yes | ComfyUI workflow in API format |
 | `images` | No | Input images for img2img workflows |
 | `s3` | No | S3 config to upload outputs instead of returning base64 |
+
+### Streaming Progress
+
+The handler yields progress chunks via RunPod's streaming API (`/stream/{jobId}`). Each chunk is a JSON object with the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Current phase: `waiting`, `uploading`, `queued`, `executing`, `running`, `collecting` |
+| `message` | string | Human-readable status message |
+| `node` | string | Current ComfyUI node ID |
+| `node_type` | string | Node class type (e.g. `KSampler`, `VAEDecode`) |
+| `node_index` | number | Number of nodes completed so far |
+| `total_nodes` | number | Total nodes in the workflow |
+| `progress` | number | Current step within a node (e.g. sampler step 5) |
+| `max` | number | Total steps within a node (e.g. 20 sampler steps) |
+| `elapsed` | number | Seconds since execution started (server-side) |
+| `error` | string | Error message if something failed |
+
+Not all fields are present in every chunk. For example, `progress`/`max` only appear during nodes that report step-level progress (like KSampler), and `node_type`/`node_index` only appear during execution.
+
+**Phase progression:** `waiting` &rarr; `uploading` (if images provided) &rarr; `queued` &rarr; `executing` &rarr; `running` (per-node) &rarr; `collecting` &rarr; final output
 
 ### Output (base64 mode)
 
@@ -119,14 +136,14 @@ The worker auto-detects the volume and configures ComfyUI to use it.
 
 ### Custom Nodes
 
-Add custom node names to `config/custom_nodes.txt` (one per line):
+Add entries to `config/custom_nodes.txt` (one per line). Use a full URL for git repos, or a package name for the comfy-cli registry:
 
 ```
+https://github.com/user/repo
 comfyui-impact-pack
-comfyui-manager
 ```
 
-They'll be installed via `comfy-cli` during the Docker build.
+They'll be cloned (URLs) or installed via `comfy-cli` (package names) during the Docker build.
 
 ## ComfyUI "Run on Cloud" Extension
 
@@ -155,9 +172,14 @@ Then restart ComfyUI.
 ### Usage
 
 1. Build your workflow as usual
-2. Click **Run on Cloud** in the top toolbar
-3. A progress overlay appears in the bottom-right showing real-time status
-4. When complete, a fullscreen gallery displays the output images with save links
+2. Click **Run on Cloud** in the top toolbar (or use the RunPod menu)
+3. A progress overlay appears in the bottom-right with:
+   - **Phase label** — color-coded: Waiting for Server &rarr; Queued &rarr; Executing &rarr; Collecting &rarr; Saving &rarr; Done
+   - **Overall progress bar** — tracks nodes completed out of total (animated indeterminate during cold start)
+   - **Step progress bar** — shows within-node progress (e.g. KSampler steps), only visible when applicable
+   - **Status line** — human-readable node type and count (e.g. "KSampler (3 of 12)")
+   - **Elapsed time and ETA** — server-side elapsed time, with estimated time remaining after 2+ nodes complete
+4. When complete, a fullscreen gallery displays the output images
 
 ## Running Workflows (CLI)
 
@@ -168,25 +190,12 @@ export RUNPOD_API_KEY="your-api-key"
 python run_workflow.py path/to/workflow.json
 ```
 
-The script streams per-node progress from the handler via RunPod's `/stream` endpoint:
-
-```
-Submitting workflow: workflow.json
-Job ID: abc-123
-  [0s] Waiting for ComfyUI server...
-  [2s] Submitting workflow to ComfyUI...
-  [3s] Executing node 3...
-  [5s] Node 3: 25% (5/20)
-  [12s] Collecting output images...
-  Saved: ./output/ComfyUI_00001_.png
-```
-
 Options:
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-o`, `--output-dir` | `./output` | Directory to save output images |
-| `--endpoint` | RunPod endpoint URL | Override the API endpoint |
+| `--endpoint` | Built-in default | Override the API endpoint |
 | `--api-key` | `$RUNPOD_API_KEY` | RunPod API key |
 
 The workflow JSON must be in ComfyUI **API format**. See [Getting the Workflow JSON](#getting-the-workflow-json).

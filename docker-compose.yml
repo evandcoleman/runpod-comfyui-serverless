@@ -2,7 +2,6 @@ services:
   comfyui-worker:
     build:
       context: .
-      target: final
     ports:
       - "8000:8000"
       - "8188:8188"
