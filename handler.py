@@ -50,6 +50,13 @@ def validate_input(job_input: dict) -> tuple[dict | None, str | None]:
             if key not in s3_config:
                 return None, f"s3 config missing '{key}'"
 
+    mm_config = job_input.get("model_manager")
+    if mm_config:
+        if not isinstance(mm_config, dict):
+            return None, "'model_manager' must be an object with 'api_url' and 'api_key'"
+        if "api_url" not in mm_config or "api_key" not in mm_config:
+            return None, "model_manager config missing 'api_url' or 'api_key'"
+
     return job_input, None
 
 
@@ -80,6 +87,16 @@ def upload_images(images: list[dict], url: str = COMFYUI_URL):
 
         resp = requests.post(f"{url}/upload/image", files=files, data=body, timeout=30)
         resp.raise_for_status()
+
+
+def configure_model_manager(mm_config: dict, url: str = COMFYUI_URL):
+    """Configure comfyui-model-manager-nodes with API credentials."""
+    resp = requests.post(
+        f"{url}/model-manager/connect",
+        json={"api_url": mm_config["api_url"], "api_key": mm_config["api_key"]},
+        timeout=10,
+    )
+    resp.raise_for_status()
 
 
 def queue_workflow(workflow: dict, client_id: str, url: str = COMFYUI_URL) -> str:
@@ -237,6 +254,7 @@ def handler(job: dict):
     workflow = validated["workflow"]
     images = validated.get("images", [])
     s3_config = validated.get("s3")
+    mm_config = validated.get("model_manager")
 
     # Pre-compute node metadata for progress reporting
     total_nodes = len(workflow)
@@ -268,6 +286,14 @@ def handler(job: dict):
         return
 
     yield {"status": "waiting", "message": "ComfyUI server ready", "elapsed": round(time.time() - wait_start, 1)}
+
+    # Configure model manager if credentials provided
+    if mm_config:
+        try:
+            configure_model_manager(mm_config)
+        except Exception as e:
+            yield {"error": f"Failed to configure model manager: {e}"}
+            return
 
     # Upload input images if provided
     if images:

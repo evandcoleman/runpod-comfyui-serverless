@@ -458,14 +458,14 @@ function showGallery(images) {
 // API Client
 // ---------------------------------------------------------------------------
 
-async function submitWorkflow(endpointUrl, apiKey, workflow) {
+async function submitWorkflow(endpointUrl, apiKey, workflow, extraInput = {}) {
   const resp = await fetch(`${endpointUrl}/run`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input: { workflow } }),
+    body: JSON.stringify({ input: { workflow, ...extraInput } }),
   });
 
   if (!resp.ok) {
@@ -710,6 +710,13 @@ async function runOnCloud() {
     return;
   }
 
+  const extraInput = {};
+  const mmApiUrl = getSetting("RunPod.ModelManager.APIURL")?.trim();
+  const mmApiKey = getSetting("RunPod.ModelManager.APIKey")?.trim();
+  if (mmApiUrl && mmApiKey) {
+    extraInput.model_manager = { api_url: mmApiUrl, api_key: mmApiKey };
+  }
+
   running = true;
   currentEndpointUrl = endpointUrl;
   currentApiKey = apiKey;
@@ -718,7 +725,7 @@ async function runOnCloud() {
 
   try {
     updateOverlay("Submitting workflow...");
-    const jobId = await submitWorkflow(endpointUrl, apiKey, prompt);
+    const jobId = await submitWorkflow(endpointUrl, apiKey, prompt, extraInput);
     currentJobId = jobId;
     updateOverlay(`Job submitted: ${jobId.slice(0, 12)}...`);
 
@@ -783,6 +790,22 @@ app.registerExtension({
       defaultValue: "",
       tooltip: "Your RunPod API key",
       category: ["RunPod", "Connection", "API Key"],
+    },
+    {
+      id: "RunPod.ModelManager.APIURL",
+      name: "Model Manager API URL",
+      type: "text",
+      defaultValue: "",
+      tooltip: "Model Manager server URL (e.g. https://models.example.com). Leave empty to skip.",
+      category: ["RunPod", "Model Manager", "API URL"],
+    },
+    {
+      id: "RunPod.ModelManager.APIKey",
+      name: "Model Manager API Key",
+      type: "text",
+      defaultValue: "",
+      tooltip: "API key for the Model Manager server",
+      category: ["RunPod", "Model Manager", "API Key"],
     },
   ],
 
