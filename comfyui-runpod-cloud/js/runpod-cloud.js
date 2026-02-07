@@ -21,6 +21,11 @@ const STYLES = `
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #e0e0e0;
   overflow: hidden;
+  transition: opacity 0.6s ease;
+}
+.runpod-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .runpod-overlay-header {
@@ -315,6 +320,15 @@ function createOverlay() {
 
 function removeOverlay() {
   document.getElementById("runpod-overlay")?.remove();
+}
+
+function scheduleOverlayDismiss(delay = 5000) {
+  const overlay = document.getElementById("runpod-overlay");
+  if (!overlay) return;
+  setTimeout(() => {
+    overlay.classList.add("fade-out");
+    overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+  }, delay);
 }
 
 function setPhase(phase, label) {
@@ -720,6 +734,7 @@ async function runOnCloud() {
       setPhase("done", "Done");
       updateOverlay(`Done — ${successCount} image(s) saved to output/`, 100, null);
       showGallery(saved);
+      scheduleOverlayDismiss();
     } else if (result && result.error) {
       setOverlayState("error");
       updateOverlay(`Error: ${result.error}`);
