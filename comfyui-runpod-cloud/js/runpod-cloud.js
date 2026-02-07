@@ -57,6 +57,8 @@ const STYLES = `
   margin-bottom: 8px;
 }
 .runpod-phase[data-phase="starting"]   { color: #f0ad4e; }
+.runpod-phase[data-phase="waiting"]    { color: #f0ad4e; }
+.runpod-phase[data-phase="queued"]     { color: #e67e22; }
 .runpod-phase[data-phase="executing"]  { color: #4a9eff; }
 .runpod-phase[data-phase="collecting"] { color: #9b59b6; }
 .runpod-phase[data-phase="saving"]     { color: #1abc9c; }
@@ -87,6 +89,15 @@ const STYLES = `
 
 .runpod-progress-bar-fill.overall { background: #4a9eff; }
 .runpod-progress-bar-fill.step    { background: #5cb85c; }
+
+@keyframes runpod-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.runpod-progress-bar-fill.indeterminate {
+  width: 40% !important;
+  animation: runpod-indeterminate 1.5s ease-in-out infinite;
+}
 
 .runpod-step-row {
   display: none;
@@ -261,7 +272,7 @@ function createOverlay() {
       <div class="runpod-phase" data-phase="starting">Starting</div>
       <div class="runpod-progress-label">Overall</div>
       <div class="runpod-progress-bar-track">
-        <div class="runpod-progress-bar-fill overall"></div>
+        <div class="runpod-progress-bar-fill overall indeterminate"></div>
       </div>
       <div class="runpod-step-row">
         <div class="runpod-progress-label">Step</div>
@@ -290,6 +301,17 @@ function setPhase(phase, label) {
     phaseEl.dataset.phase = phase;
     phaseEl.textContent = label || phase;
   }
+  // Toggle indeterminate animation for pre-execution phases
+  const overallFill = overlay.querySelector(".runpod-progress-bar-fill.overall");
+  if (overallFill) {
+    const indeterminate = phase === "starting" || phase === "waiting" || phase === "queued";
+    overallFill.classList.toggle("indeterminate", indeterminate);
+    if (!indeterminate) {
+      // Reset to 0 width when transitioning out of indeterminate
+      // (actual progress will set the real width)
+      overallFill.style.width = overallFill.style.width || "0%";
+    }
+  }
   progressState.phase = phase;
 }
 
@@ -305,6 +327,7 @@ function updateOverlay(message, overallPct = null, stepPct = null) {
   if (statusEl && message) statusEl.textContent = message;
 
   if (overallFill && overallPct !== null) {
+    overallFill.classList.remove("indeterminate");
     overallFill.style.width = `${Math.min(100, Math.max(0, overallPct))}%`;
   }
 
@@ -463,8 +486,14 @@ async function pollStream(endpointUrl, apiKey, jobId) {
           if (output.node_type) progressState.currentNodeType = output.node_type;
 
           // Phase transitions
-          if (output.status === "executing" || output.status === "running") {
-            if (progressState.phase === "starting") setPhase("executing", "Executing");
+          if (output.status === "waiting") {
+            setPhase("waiting", "Waiting for Server");
+          } else if (output.status === "queued") {
+            setPhase("queued", "Queued");
+          } else if (output.status === "uploading") {
+            setPhase("queued", "Uploading");
+          } else if (output.status === "executing" || output.status === "running") {
+            if (progressState.phase !== "executing") setPhase("executing", "Executing");
           } else if (output.status === "collecting") {
             setPhase("collecting", "Collecting");
           }

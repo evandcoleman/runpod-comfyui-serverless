@@ -242,11 +242,32 @@ def handler(job: dict):
     total_nodes = len(workflow)
     node_types = {nid: node.get("class_type", "Unknown") for nid, node in workflow.items()}
 
-    # Wait for ComfyUI
-    yield {"status": "waiting", "message": "Waiting for ComfyUI server..."}
-    if not check_server():
+    # Wait for ComfyUI — yield periodic updates so the frontend stays alive
+    server_ready = False
+    wait_start = time.time()
+    for attempt in range(500):
+        try:
+            resp = requests.get(f"{COMFYUI_URL}/system_stats", timeout=2)
+            if resp.status_code == 200:
+                server_ready = True
+                break
+        except requests.ConnectionError:
+            pass
+        # Yield an update every ~1s (every 20 attempts at 0.05s delay)
+        if attempt % 20 == 0:
+            elapsed_wait = round(time.time() - wait_start, 1)
+            yield {
+                "status": "waiting",
+                "message": f"Waiting for ComfyUI server... ({elapsed_wait}s)",
+                "elapsed": elapsed_wait,
+            }
+        time.sleep(0.05)
+
+    if not server_ready:
         yield {"error": "ComfyUI server failed to start"}
         return
+
+    yield {"status": "waiting", "message": "ComfyUI server ready", "elapsed": round(time.time() - wait_start, 1)}
 
     # Upload input images if provided
     if images:
