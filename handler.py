@@ -238,6 +238,10 @@ def handler(job: dict):
     images = validated.get("images", [])
     s3_config = validated.get("s3")
 
+    # Pre-compute node metadata for progress reporting
+    total_nodes = len(workflow)
+    node_types = {nid: node.get("class_type", "Unknown") for nid, node in workflow.items()}
+
     # Wait for ComfyUI
     yield {"status": "waiting", "message": "Waiting for ComfyUI server..."}
     if not check_server():
@@ -262,7 +266,7 @@ def handler(job: dict):
         return
 
     # Queue the workflow
-    yield {"status": "queued", "message": "Submitting workflow to ComfyUI..."}
+    yield {"status": "queued", "message": "Submitting workflow to ComfyUI...", "total_nodes": total_nodes}
     try:
         prompt_id = queue_workflow(workflow, client_id)
     except RuntimeError as e:
@@ -272,22 +276,38 @@ def handler(job: dict):
 
     # Stream progress from WebSocket
     try:
-        start = time.time()
+        exec_start = time.time()
         timeout = 600
         current_node = None
-        while time.time() - start < timeout:
+        nodes_done = 0
+        while time.time() - exec_start < timeout:
             message = ws.recv()
             if isinstance(message, str):
                 data = json.loads(message)
                 msg_type = data.get("type")
 
-                if msg_type == "progress":
+                if msg_type == "execution_start":
+                    exec_data = data.get("data", {})
+                    if exec_data.get("prompt_id") == prompt_id:
+                        exec_start = time.time()
+                        yield {
+                            "status": "executing",
+                            "message": "Execution started",
+                            "total_nodes": total_nodes,
+                            "elapsed": 0,
+                        }
+
+                elif msg_type == "progress":
                     prog = data.get("data", {})
                     yield {
                         "status": "running",
                         "node": current_node,
+                        "node_type": node_types.get(current_node, "Unknown"),
+                        "node_index": nodes_done,
+                        "total_nodes": total_nodes,
                         "progress": prog.get("value", 0),
                         "max": prog.get("max", 0),
+                        "elapsed": round(time.time() - exec_start, 1),
                     }
 
                 elif msg_type == "executing":
@@ -298,7 +318,16 @@ def handler(job: dict):
                     if node is None:
                         break  # Workflow complete
                     current_node = node
-                    yield {"status": "running", "message": f"Executing node {node}..."}
+                    nodes_done += 1
+                    yield {
+                        "status": "running",
+                        "message": f"Executing {node_types.get(node, 'node')}...",
+                        "node": node,
+                        "node_type": node_types.get(node, "Unknown"),
+                        "node_index": nodes_done,
+                        "total_nodes": total_nodes,
+                        "elapsed": round(time.time() - exec_start, 1),
+                    }
 
                 elif msg_type == "execution_error":
                     error_data = data.get("data", {})
@@ -309,7 +338,14 @@ def handler(job: dict):
                     cached = data.get("data", {})
                     nodes = cached.get("nodes", [])
                     if nodes:
-                        yield {"status": "running", "message": f"Cached {len(nodes)} node(s)"}
+                        nodes_done += len(nodes)
+                        yield {
+                            "status": "running",
+                            "message": f"Cached {len(nodes)} node(s)",
+                            "node_index": nodes_done,
+                            "total_nodes": total_nodes,
+                            "elapsed": round(time.time() - exec_start, 1),
+                        }
         else:
             yield {"error": f"Workflow did not complete within {timeout}s"}
             return
