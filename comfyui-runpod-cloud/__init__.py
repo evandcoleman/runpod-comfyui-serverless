@@ -3,6 +3,7 @@
 import base64
 import os
 
+import folder_paths
 from aiohttp import web
 from server import PromptServer
 
@@ -33,7 +34,7 @@ async def save_image(request):
     if not image_b64 and not image_url:
         return web.json_response({"error": "No image data or URL provided"}, status=400)
 
-    output_dir = PromptServer.instance.prompt_queue.server.output_dir
+    output_dir = folder_paths.get_output_directory()
     os.makedirs(output_dir, exist_ok=True)
     filepath = _unique_path(output_dir, filename)
 

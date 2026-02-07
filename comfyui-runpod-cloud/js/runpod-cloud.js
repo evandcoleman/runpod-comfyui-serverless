@@ -532,7 +532,9 @@ app.registerExtension({
   },
 
   async setup() {
-    // Also add a dedicated toolbar button via ComfyButton for quick access
+    let injected = false;
+
+    // Try ComfyButton API (works in standard ComfyUI with legacy menu)
     try {
       const { ComfyButton } = await import("../../scripts/ui/components/button.js");
       const { ComfyButtonGroup } = await import("../../scripts/ui/components/buttonGroup.js");
@@ -546,16 +548,40 @@ app.registerExtension({
       });
 
       const group = new ComfyButtonGroup(btn.element);
-      app.menu?.settingsGroup?.element?.before(group.element);
+      if (app.menu?.settingsGroup?.element) {
+        app.menu.settingsGroup.element.before(group.element);
+        injected = true;
+      }
     } catch {
-      // Fallback for older ComfyUI: inject a plain button into the legacy menu
-      const menu = document.querySelector(".comfy-menu");
-      if (menu) {
-        const btn = document.createElement("button");
-        btn.textContent = "Run on Cloud";
-        btn.title = "Submit workflow to RunPod serverless endpoint";
-        btn.addEventListener("click", runOnCloud);
-        menu.append(btn);
+      // ComfyButton not available
+    }
+
+    // Fallback: inject a plain button into whatever menu container exists
+    if (!injected) {
+      const btn = document.createElement("button");
+      btn.id = "runpod-cloud-btn";
+      btn.textContent = "Run on Cloud";
+      btn.title = "Submit workflow to RunPod serverless endpoint";
+      btn.addEventListener("click", runOnCloud);
+
+      // Try legacy .comfy-menu first
+      const legacyMenu = document.querySelector(".comfy-menu");
+      if (legacyMenu) {
+        legacyMenu.append(btn);
+        injected = true;
+      }
+
+      // If nothing matched yet, use MutationObserver to wait for DOM
+      if (!injected) {
+        const observer = new MutationObserver(() => {
+          const menu = document.querySelector(".comfy-menu");
+          if (menu) {
+            menu.append(btn);
+            observer.disconnect();
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => observer.disconnect(), 10000);
       }
     }
   },
