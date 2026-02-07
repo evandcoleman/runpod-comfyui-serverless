@@ -8,3 +8,4 @@ https://github.com/evandcoleman/comfyui-model-manager-nodes
 https://github.com/gseth/ControlAltAI-Nodes
 https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes
 https://github.com/ltdrdata/was-node-suite-comfyui
+https://github.com/giriss/comfy-image-saver
