@@ -1,12 +1,14 @@
 # Custom nodes to install via comfy-cli or git clone
 # One entry per line. Lines starting with # are ignored.
 # Use a package name for comfy-cli registry, or a full URL for git repos.
+# Append @<commit> to pin a specific version (e.g. https://github.com/user/repo@abc123)
 # Examples:
 #   comfyui-impact-pack
 #   https://github.com/user/repo
-https://github.com/evandcoleman/comfyui-model-manager-nodes
-https://github.com/gseth/ControlAltAI-Nodes
-https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes
-https://github.com/ltdrdata/was-node-suite-comfyui
-https://github.com/giriss/comfy-image-saver
-https://github.com/rgthree/rgthree-comfy
+#   https://github.com/user/repo@abc123
+https://github.com/evandcoleman/comfyui-model-manager-nodes@61a7eaf
+https://github.com/gseth/ControlAltAI-Nodes@721492b
+https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes@d78b780
+https://github.com/ltdrdata/was-node-suite-comfyui@afeee09
+https://github.com/giriss/comfy-image-saver@65e6903
+https://github.com/rgthree/rgthree-comfy@8ff50e4

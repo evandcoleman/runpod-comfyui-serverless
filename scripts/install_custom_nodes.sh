@@ -15,8 +15,21 @@ while IFS= read -r line || [ -n "$line" ]; do
 
     echo "Installing custom node: $line"
     if [[ "$line" == http* ]]; then
-        repo_name=$(basename "$line" .git)
-        git clone --depth 1 "$line" "/comfyui/custom_nodes/$repo_name"
+        # Support url@commit pinning (e.g. https://github.com/user/repo@abc123)
+        if [[ "$line" == *@* ]]; then
+            url="${line%@*}"
+            ref="${line##*@}"
+        else
+            url="$line"
+            ref=""
+        fi
+        repo_name=$(basename "$url" .git)
+        if [ -n "$ref" ]; then
+            git clone "$url" "/comfyui/custom_nodes/$repo_name"
+            git -C "/comfyui/custom_nodes/$repo_name" checkout "$ref"
+        else
+            git clone --depth 1 "$url" "/comfyui/custom_nodes/$repo_name"
+        fi
         if [ -f "/comfyui/custom_nodes/$repo_name/requirements.txt" ]; then
             pip install -r "/comfyui/custom_nodes/$repo_name/requirements.txt"
         fi
