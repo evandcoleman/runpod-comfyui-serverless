@@ -716,6 +716,10 @@ async function runOnCloud() {
   if (mmApiUrl && mmApiKey) {
     extraInput.model_manager = { api_url: mmApiUrl, api_key: mmApiKey };
   }
+  const skipImages = getSetting("RunPod.Execution.SkipImages");
+  if (skipImages) {
+    extraInput.skip_images = true;
+  }
 
   running = true;
   currentEndpointUrl = endpointUrl;
@@ -741,6 +745,11 @@ async function runOnCloud() {
       setPhase("done", "Done");
       updateOverlay(`Done — ${successCount} image(s) saved to output/`, 100, null);
       showGallery(saved);
+      scheduleOverlayDismiss();
+    } else if (result && result.status === "done") {
+      setOverlayState("success");
+      setPhase("done", "Done");
+      updateOverlay("Workflow complete", 100, null);
       scheduleOverlayDismiss();
     } else if (result && result.error) {
       setOverlayState("error");
@@ -806,6 +815,14 @@ app.registerExtension({
       defaultValue: "",
       tooltip: "API key for the Model Manager server",
       category: ["RunPod", "Model Manager", "API Key"],
+    },
+    {
+      id: "RunPod.Execution.SkipImages",
+      name: "Skip Image Collection",
+      type: "boolean",
+      defaultValue: false,
+      tooltip: "Skip collecting output images from the server. Use when a node in the workflow handles image upload.",
+      category: ["RunPod", "Execution", "Skip Image Collection"],
     },
   ],
 

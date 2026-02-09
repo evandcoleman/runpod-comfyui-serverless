@@ -255,6 +255,7 @@ def handler(job: dict):
     images = validated.get("images", [])
     s3_config = validated.get("s3")
     mm_config = validated.get("model_manager")
+    skip_images = validated.get("skip_images", False)
 
     # Pre-compute node metadata for progress reporting
     total_nodes = len(workflow)
@@ -398,6 +399,10 @@ def handler(job: dict):
             return
     finally:
         ws.close()
+
+    if skip_images:
+        yield {"status": "done", "message": "Workflow complete"}
+        return
 
     # Collect results
     yield {"status": "collecting", "message": "Collecting output images..."}
