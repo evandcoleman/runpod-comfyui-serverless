@@ -12,4 +12,4 @@ https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes@d78b780
 https://github.com/ltdrdata/was-node-suite-comfyui@afeee09
 https://github.com/giriss/comfy-image-saver@65e6903
 https://github.com/rgthree/rgthree-comfy@8ff50e4
-https://github.com/evandcoleman/comfyui-comparison-grid@d6bad81
+https://github.com/evandcoleman/comfyui-comparison-grid@4075af3
