@@ -9,8 +9,18 @@ import requests
 import yaml
 
 COMFYUI_MODELS_DIR = Path("/comfyui/models")
+NETWORK_VOLUME_MODELS_DIR = Path("/runpod-volume/models")
 MANIFEST_PATH = Path(__file__).parent.parent / "config" / "models.yaml"
 CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
+
+
+def file_exists_on_volume(dest_subdir: str, filename: str) -> bool:
+    """Check if a model file exists on the network volume."""
+    volume_path = NETWORK_VOLUME_MODELS_DIR / dest_subdir / filename
+    if volume_path.exists():
+        print(f"  [volume] {filename} found at {volume_path}")
+        return True
+    return False
 
 
 def download_file(url: str, dest: Path, headers: dict | None = None):
@@ -71,6 +81,12 @@ def main():
         headers["Authorization"] = f"Bearer {hf_token}"
         print("Using HuggingFace auth token")
 
+    has_volume = NETWORK_VOLUME_MODELS_DIR.is_dir()
+    if has_volume:
+        print(f"Network volume detected at {NETWORK_VOLUME_MODELS_DIR}")
+    else:
+        print("No network volume detected, will download all models")
+
     for model in config["models"]:
         repo = model["repo"]
         print(f"\nModel repo: {repo}")
@@ -79,6 +95,11 @@ def main():
             filepath = file_entry["path"]
             dest_subdir = file_entry["dest"]
             filename = Path(filepath).name
+
+            # Skip download if file exists on network volume
+            if has_volume and file_exists_on_volume(dest_subdir, filename):
+                continue
+
             dest = models_dir / dest_subdir / filename
             url = build_hf_url(repo, filepath)
 
@@ -88,7 +109,7 @@ def main():
                 print(f"  [error] Failed to download {filename}: {e}", file=sys.stderr)
                 sys.exit(1)
 
-    print("\nAll models downloaded successfully")
+    print("\nAll models ready")
 
 
 if __name__ == "__main__":
